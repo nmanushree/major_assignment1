@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Supply Chain Data</title>
+    <script src="https://d3js.org/d3.v5.min.js"></script>
+    <style>
+        table {
+            border-collapse: collapse;
+        }
+
+        table, th, td {
+            border: 1px solid black;
+        }
+
+        th, td {
+            padding: 8px;
+            text-align: left;
+        }
+
+        .line {
+            fill: none;
+            stroke-width: 2px;
+        }
+
+        .axis path,
+        .axis line {
+            fill: none;
+            stroke: black;
+            shape-rendering: crispEdges;
+        }
+
+        .legend {
+            font-size: 12px;
+            padding: 5px;
+        }
+
+        .tick text {
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h2>Supply Chain Margin of Profit Data</h2>
+    <table id="profit-table">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>EstimatedCost</th>
+                <th>RawMaterial</th>
+                <th>Workmanship</th>
+                <th>StorageCost</th>
+                <th>ActualCost</th>
+                <th>SoldPrice</th>
+                <th>MarginOfProfit</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <div id="chart"></div>
+
+    <script>
+        d3.csv("data_sample(1).csv").then(function(data) {
+            data.forEach(function(d) {
+                d.date = new Date(d.date);
+                d.RawMaterial = +d.RawMaterial;
+                d.Workmanship = +d.Workmanship;
+                d.StorageCost = +d.StorageCost;
+                d.EstimatedCost = +d.EstimatedCost.replace(/[^0-9.]/g, '');
+                d.ActualCost = d.RawMaterial + d.Workmanship + d.StorageCost;
+                d.SoldPrice = d.EstimatedCost * 1.1;
+                d.MarginOfProfit = d.SoldPrice - d.ActualCost;
+            });
+
+            var table = d3.select("#profit-table tbody");
+            data.forEach(function(d) {
+                var row = table.append("tr");
+                row.append("td").text(d.date.toLocaleDateString());
+                row.append("td").text(`$${d.EstimatedCost.toFixed(2)}`);
+                row.append("td").text(`$${d.RawMaterial.toFixed(2)}`);
+                row.append("td").text(`$${d.Workmanship.toFixed(2)}`);
+                row.append("td").text(`$${d.StorageCost.toFixed(2)}`);
+                row.append("td").text(`$${d.ActualCost.toFixed(2)}`);
+                row.append("td").text(`$${d.SoldPrice.toFixed(2)}`);
+                row.append("td").text(`$${d.MarginOfProfit.toFixed(2)}`);
+            });
+
+            const margin = { top: 70, right: 150, bottom: 100, left: 50 },
+                width = 960 - margin.left - margin.right,
+                height = 500 - margin.top - margin.bottom;
+
+            const x = d3.scaleTime().range([0, width]);
+            const y = d3.scaleLinear().range([height, 0]);
+
+            y.domain([
+                d3.min(data, function(d) {
+                    return Math.min(d.EstimatedCost, d.ActualCost, d.SoldPrice, d.MarginOfProfit);
+                }),
+                d3.max(data, function(d) {
+                    return Math.max(d.EstimatedCost, d.ActualCost, d.SoldPrice, d.MarginOfProfit);
+                })
+            ]);
+
+            var dateExtent = d3.extent(data, function(d) { return d.date; });
+            x.domain([d3.timeDay.offset(dateExtent[0], -1), d3.timeDay.offset(dateExtent[1], 1)]);
+
+            const estimatedCostLine = d3.line()
+                .x(d => x(d.date))
+                .y(d => y(d.EstimatedCost));
+
+            const actualCostLine = d3.line()
+                .x(d => x(d.date))
+                .y(d => y(d.ActualCost));
+
+            const soldPriceLine = d3.line()
+                .x(d => x(d.date))
+                .y(d => y(d.SoldPrice));
+
+            const marginProfitLine = d3.line()
+                .x(d => x(d.date))
+                .y(d => y(d.MarginOfProfit));
+
+            const colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728'];
+
+            const svg = d3.select("#chart").append("svg")
+                .attr("width", width + margin.left + margin.right)
+                .attr("height", height + margin.top + margin.bottom)
+                .append("g")
+                .attr("transform", `translate(${margin.left},${margin.top})`);
+
+            svg.append("path")
+                .data([data])
+                .attr("class", "line")
+                .style("stroke", colors[0])
+                .attr("d", estimatedCostLine);
+
+            svg.append("path")
+                .data([data])
+                .attr("class", "line")
+                .style("stroke", colors[1])
+                .attr("d", actualCostLine);
+
+            svg.append("path")
+                .data([data])
+                .attr("class", "line")
+                .style("stroke", colors[2])
+                .attr("d", soldPriceLine);
+
+            svg.append("path")
+                .data([data])
+                .attr("class", "line")
+                .style("stroke", colors[3])
+                .attr("d", marginProfitLine);
+
+            svg.append("g")
+                .attr("transform", `translate(0,${height})`)
+                .call(d3.axisBottom(x));
+
+            svg.append("g")
+                .call(d3.axisLeft(y));
+
+            const legend = svg.selectAll(".legend")
+                .data(["Estimated Cost", "Actual Cost", "Sold Price", "Margin Of Profit"])
+                .enter().append("g")
+                .attr("class", "legend")
+                .attr("transform", function(d, i) { return `translate(0,${i * 20})`; });
+
+            legend.append("rect")
+                .attr("x", width + 18)
+                .attr("width", 18)
+                .attr("height", 18)
+                .style("fill", (d, i) => colors[i]);
+
+            legend.append("text")
+                .attr("x", width + 42)
+                .attr("y", 9)
+                .attr("dy", ".35em")
+                .style("text-anchor", "start")
+                .text(function(d) { return d; });
+        });
+    </script>
+</body>
+</html>
